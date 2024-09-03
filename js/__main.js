@@ -518,7 +518,7 @@ const detectVideo = (vidSource, canvasRef) => {
     worker = new Worker('worker.js');
     worker.postMessage({
       type: 'loadModel',
-      modelUrl: `${window.location.href}/${modelName}_web_model/model.json`,
+      modelUrl: `${window.location.href}${modelName}_web_model/model.json`,
     });
     console.log("despues postmenssage instancia worker");
   }
