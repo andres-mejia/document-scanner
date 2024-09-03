@@ -1,0 +1,59 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1"
+    />
+    <meta
+      name="description"
+      content="Smart Device Camera Template for HTML, CSS, JS and WebRTC"
+    />
+    <meta name="keywords" content="HTML,CSS,JavaScript, WebRTC, Camera" />
+    <meta name="author" content="Kasper Kamperman" />
+    <title>Webcomponent YOLOv10</title>
+    <link rel="stylesheet" type="text/css" href="style.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+  </head>
+  </head>
+  <body>
+    <div id="container">
+      <div id="vid_container">
+        <video id="video" autoplay playsinline style="display: block;"></video>
+        <canvas id="canvas" width="640" height="640"></canvas>
+        <div id="video_overlay"></div>
+      </div>
+      <div id="picture" style="display: none;">
+        <canvas id="renderPicture" width="640" height="640"></canvas>
+        <canvas id="canvasPicture" width="640" height="640"></canvas>
+      </div>
+      <div id="gui_controls">
+        <div id="loader" class="loader">Loading model... 0%</div>
+        <button
+          id="switchCameraButton"
+          name="switch Camera"
+          type="button"
+          aria-pressed="false"
+        ></button>
+        <button id="takePhotoButton" name="take Photo" type="button"></button>
+        <button id="returnVideo" name="Return video" type="button" style="display: none;"></button>
+        <button
+          id="toggleFullScreenButton"
+          name="toggle FullScreen"
+          type="button"
+          aria-pressed="false"
+        ></button>
+      </div>
+    </div>
+
+    <script src="js/adapter.min.js"></script>
+    <script src="js/screenfull.min.js"></script>
+    <script src="js/howler.core.min.js"></script>
+    <!-- <script src="js/renderBox.js"></script>
+    <script src="js/detect.js"></script> -->
+    <script src="js/main.js"></script>
+    <!-- <script type="module" src="js/app.js"></script> -->
+  </body>
+</html>
