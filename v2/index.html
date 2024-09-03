@@ -16,19 +16,31 @@
             left: 0;
             z-index: -1;
         }
+        button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            z-index: 1;
+        }
     </style>
 </head>
 <body>
     <h1>YOLOv10n Object Detection</h1>
+    <button id="toggleCamera">Toggle Camera</button>
     <video id="webcam" autoplay playsinline width="640" height="640"></video>
     <canvas id="canvas" width="640" height="640"></canvas>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script>
+        let facingMode = "environment"; // Inicialmente, usar la cámara trasera
+
         async function setupWebcam() {
             const webcamElement = document.getElementById('webcam');
             const constraints = {
-                video: true
+                video: {
+                    facingMode: facingMode // Usar el modo de cámara actual
+                }
             };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             webcamElement.srcObject = stream;
@@ -37,6 +49,11 @@
                     resolve(webcamElement);
                 };
             });
+        }
+
+        async function toggleCamera() {
+            facingMode = facingMode === "user" ? "environment" : "user"; // Alternar entre frontal y trasera
+            await setupWebcam(); // Reconfigurar la cámara
         }
 
         async function loadModel() {
@@ -52,15 +69,13 @@
             context.drawImage(webcamElement, 0, 0, canvas.width, canvas.height);
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
-            // Extraer los canales RGB y normalizar los datos
             const [r, g, b] = [[], [], []];
             for (let i = 0; i < imageData.data.length; i += 4) {
-                r.push(imageData.data[i] / 255);     // Rojo
-                g.push(imageData.data[i + 1] / 255); // Verde
-                b.push(imageData.data[i + 2] / 255); // Azul
+                r.push(imageData.data[i] / 255);
+                g.push(imageData.data[i + 1] / 255);
+                b.push(imageData.data[i + 2] / 255);
             }
 
-            // Concatenar los canales en orden y crear el tensor
             const data = new Float32Array(r.concat(g).concat(b));
             return new ort.Tensor('float32', data, [1, 3, canvas.height, canvas.width]);
         }
@@ -70,7 +85,7 @@
             const feeds = { images: inputTensor };
             const output = await session.run(feeds);
 
-            return output;  // Devuelve los resultados de la detección
+            return output;
         }
 
         function drawDetections(context, detections) {
@@ -88,31 +103,29 @@
         }
 
         function parseYOLOOutput(output) {
-            const data = output.output0.data; // Accedemos al tensor principal
-            
+            const data = output.output0.data;
             const detections = [];
-            const numDetections = data.length / 6; // Suponiendo que cada detección tiene 6 valores: [x, y, width, height, score, label]
-        
+            const numDetections = data.length / 6;
+
             for (let i = 0; i < numDetections; i++) {
                 const x = data[i * 6];
                 const y = data[i * 6 + 1];
                 const width = data[i * 6 + 2];
                 const height = data[i * 6 + 3];
                 const score = data[i * 6 + 4];
-                const label = data[i * 6 + 5]; // Esto puede ser un índice de clase en lugar de una etiqueta textual directa
-        
-                if (score > 0.5) { // Filtrar detecciones con confianza mayor a 50%
+                const label = data[i * 6 + 5];
+
+                if (score > 0.5) {
                     detections.push({
                         box: [x, y, width, height],
                         score: score,
-                        label: label // Necesitarás un mapeo de índices de clase a nombres de etiquetas
+                        label: label
                     });
                 }
             }
-        
+
             return detections;
         }
-        
 
         async function main() {
             const webcamElement = await setupWebcam();
@@ -133,6 +146,9 @@
             }
 
             frameProcessingLoop();
+
+            // Event listener para el botón
+            document.getElementById('toggleCamera').addEventListener('click', toggleCamera);
         }
 
         main();
