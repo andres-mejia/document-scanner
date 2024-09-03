@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv10n ONNX WebAssembly Demo</title>
+    <style>
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    <h1>YOLOv10n Object Detection</h1>
+    <video id="webcam" autoplay playsinline width="640" height="640"></video>
+    <canvas id="canvas" width="640" height="640"></canvas>
+    
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script>
+        async function setupWebcam() {
+            const webcamElement = document.getElementById('webcam');
+            const constraints = {
+                video: true
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            webcamElement.srcObject = stream;
+            return new Promise((resolve) => {
+                webcamElement.onloadedmetadata = () => {
+                    resolve(webcamElement);
+                };
+            });
+        }
+
+        async function loadModel() {
+            const session = await ort.InferenceSession.create('model/yolov10n.onnx');
+            return session;
+        }
+
+        function preprocessFrame(webcamElement) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 640;
+            canvas.height = 640;
+            context.drawImage(webcamElement, 0, 0, canvas.width, canvas.height);
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Extraer los canales RGB y normalizar los datos
+            const [r, g, b] = [[], [], []];
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                r.push(imageData.data[i] / 255);     // Rojo
+                g.push(imageData.data[i + 1] / 255); // Verde
+                b.push(imageData.data[i + 2] / 255); // Azul
+            }
+
+            // Concatenar los canales en orden y crear el tensor
+            const data = new Float32Array(r.concat(g).concat(b));
+            return new ort.Tensor('float32', data, [1, 3, canvas.height, canvas.width]);
+        }
+
+        async function detectObjects(session, webcamElement) {
+            const inputTensor = preprocessFrame(webcamElement);
+            const feeds = { images: inputTensor };
+            const output = await session.run(feeds);
+
+            return output;  // Devuelve los resultados de la detección
+        }
+
+        function drawDetections(context, detections) {
+            detections.forEach(detection => {
+                const [x, y, width, height] = detection.box;
+
+                context.strokeStyle = 'red';
+                context.lineWidth = 2;
+                context.strokeRect(x, y, width, height);
+
+                context.font = '18px Arial';
+                context.fillStyle = 'red';
+                context.fillText(`${detection.label} (${Math.round(detection.score * 100)}%)`, x, y - 10);
+            });
+        }
+
+        function parseYOLOOutput(output) {
+            const data = output.output0.data; // Accedemos al tensor principal
+            
+            const detections = [];
+            const numDetections = data.length / 6; // Suponiendo que cada detección tiene 6 valores: [x, y, width, height, score, label]
+        
+            for (let i = 0; i < numDetections; i++) {
+                const x = data[i * 6];
+                const y = data[i * 6 + 1];
+                const width = data[i * 6 + 2];
+                const height = data[i * 6 + 3];
+                const score = data[i * 6 + 4];
+                const label = data[i * 6 + 5]; // Esto puede ser un índice de clase en lugar de una etiqueta textual directa
+        
+                if (score > 0.5) { // Filtrar detecciones con confianza mayor a 50%
+                    detections.push({
+                        box: [x, y, width, height],
+                        score: score,
+                        label: label // Necesitarás un mapeo de índices de clase a nombres de etiquetas
+                    });
+                }
+            }
+        
+            return detections;
+        }
+        
+
+        async function main() {
+            const webcamElement = await setupWebcam();
+            const session = await loadModel();
+
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            async function frameProcessingLoop() {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(webcamElement, 0, 0, canvas.width, canvas.height);
+
+                const output = await detectObjects(session, webcamElement);
+                const detections = parseYOLOOutput(output);
+
+                drawDetections(context, detections);
+                requestAnimationFrame(frameProcessingLoop);
+            }
+
+            frameProcessingLoop();
+        }
+
+        main();
+    </script>
+</body>
+</html>
