@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await tf.setBackend('webgl');
     await tf.ready();
   
-    model = await tf.loadGraphModel(`${window.location.href}/${modelName}_web_model/model.json`, {
+    model = await tf.loadGraphModel(`${window.location.href}${modelName}_web_model/model.json`, {
       onProgress: (fractions) => {
         loader.textContent = `Loading model... ${(fractions * 100).toFixed(2)}%`;
         console.log(loader.textContent);

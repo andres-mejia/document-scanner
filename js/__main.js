@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
     // //   inputShape: [1, 0, 0, 3],
     // // };
 
-    // // var yolov8 = await tf.loadGraphModel(`${window.location.href}/${modelName}_web_model/model.json`, {
+    // // var yolov8 = await tf.loadGraphModel(`${window.location.href}${modelName}_web_model/model.json`, {
     // //   onProgress: (fractions) => {
     // //     loader.textContent = `Loading model... ${(fractions * 100).toFixed(2)}%`;
     // //     console.log(loader.textContent);
