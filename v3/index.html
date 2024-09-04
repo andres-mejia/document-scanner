@@ -1,20 +1,50 @@
 <video id="video" autoplay></video>
 <canvas id="canvas"></canvas>
+<button id="switch-btn">Switch Camera</button>
 
 <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const worker = new Worker('worker.js');
+    let video = document.getElementById('video');
+    let canvas = document.getElementById('canvas');
+    let ctx = canvas.getContext('2d');
+    let worker = new Worker('worker.js');
+    let currentDeviceId = null;
+    let devices = [];
+    
+    // Verifica que OpenCV.js esté listo
+    cv['onRuntimeInitialized'] = () => {
+        console.log("OpenCV.js is ready");
+        initCamera();
+    };
 
-    // Captura el video de la cámara
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
+    // Inicializa la cámara
+    async function initCamera(deviceId = null) {
+        let constraints = {
+            video: {
+                deviceId: deviceId ? { exact: deviceId } : undefined,
+                facingMode: "environment" // Cámara trasera por defecto
+            }
+        };
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
-        })
-        .catch(err => {
-            console.error("Error accessing camera: ", err);
-        });
+
+            if (devices.length === 0) {
+                devices = await navigator.mediaDevices.enumerateDevices();
+                devices = devices.filter(device => device.kind === 'videoinput');
+            }
+        } catch (error) {
+            console.error("Error accessing camera: ", error);
+        }
+    }
+
+    // Cambia entre cámaras
+    document.getElementById('switch-btn').addEventListener('click', () => {
+        if (devices.length > 1) {
+            currentDeviceId = currentDeviceId === devices[0].deviceId ? devices[1].deviceId : devices[0].deviceId;
+            initCamera(currentDeviceId);
+        }
+    });
 
     // Procesar cada frame del video
     video.addEventListener('play', () => {
@@ -30,10 +60,10 @@
 
             // Enviar los datos al Web Worker
             worker.postMessage({
-                imageData: imageData.data,
+                imageData: imageData.data.buffer,
                 width: imageData.width,
                 height: imageData.height
-            });
+            }, [imageData.data.buffer]); // Transferencia de buffer
 
             requestAnimationFrame(processFrame);  // Procesar el siguiente frame
         }
@@ -44,7 +74,12 @@
     // Recibir la imagen procesada del Web Worker
     worker.onmessage = function(event) {
         const { resultImageData, width, height } = event.data;
-        const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
-        ctx.putImageData(processedImageData, 0, 0);
+
+        if (resultImageData && width && height) {
+            const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
+            ctx.putImageData(processedImageData, 0, 0);
+        } else {
+            console.error("Invalid image data received from Web Worker");
+        }
     };
 </script>
