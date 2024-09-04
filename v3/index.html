@@ -1,0 +1,50 @@
+<video id="video" autoplay></video>
+<canvas id="canvas"></canvas>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const worker = new Worker('worker.js');
+
+    // Captura el video de la cámara
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Error accessing camera: ", err);
+        });
+
+    // Procesar cada frame del video
+    video.addEventListener('play', () => {
+        function processFrame() {
+            if (video.paused || video.ended) return;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Obtener los datos de imagen del canvas
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Enviar los datos al Web Worker
+            worker.postMessage({
+                imageData: imageData.data,
+                width: imageData.width,
+                height: imageData.height
+            });
+
+            requestAnimationFrame(processFrame);  // Procesar el siguiente frame
+        }
+
+        requestAnimationFrame(processFrame);
+    });
+
+    // Recibir la imagen procesada del Web Worker
+    worker.onmessage = function(event) {
+        const { resultImageData, width, height } = event.data;
+        const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
+        ctx.putImageData(processedImageData, 0, 0);
+    };
+</script>
