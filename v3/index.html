@@ -1,85 +1,110 @@
-<video id="video" autoplay></video>
-<canvas id="canvas"></canvas>
-<button id="switch-btn">Switch Camera</button>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Scanner with OpenCV.js</title>
 
-<script>
-    let video = document.getElementById('video');
-    let canvas = document.getElementById('canvas');
-    let ctx = canvas.getContext('2d');
-    let worker = new Worker('worker.js');
-    let currentDeviceId = null;
-    let devices = [];
-    
-    // Verifica que OpenCV.js esté listo
-    cv['onRuntimeInitialized'] = () => {
-        console.log("OpenCV.js is ready");
-        initCamera();
-    };
+    <!-- Incluir OpenCV.js desde CDN -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+</head>
+<body>
+    <h1>Document Scanner</h1>
 
-    // Inicializa la cámara
-    async function initCamera(deviceId = null) {
-        let constraints = {
-            video: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
-                facingMode: "environment" // Cámara trasera por defecto
+    <!-- Video que muestra la cámara en tiempo real -->
+    <video id="video" autoplay></video>
+
+    <!-- Canvas donde se muestra el procesamiento -->
+    <canvas id="canvas"></canvas>
+
+    <!-- Botón para cambiar la cámara -->
+    <button id="switch-btn">Switch Camera</button>
+
+    <script>
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        let worker = new Worker('worker.js');
+        let currentDeviceId = null;
+        let devices = [];
+
+        // Verifica que OpenCV.js esté listo
+        function onOpenCVReady() {
+            console.log("OpenCV.js is ready");
+            initCamera();  // Inicializa la cámara solo cuando OpenCV está listo
+        }
+
+        // La función `onRuntimeInitialized` de OpenCV.js
+        window.cv = window.cv || {};
+        cv['onRuntimeInitialized'] = onOpenCVReady;
+
+        // Inicializa la cámara
+        async function initCamera(deviceId = null) {
+            let constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined,
+                    facingMode: "environment" // Cámara trasera por defecto
+                }
+            };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+
+                // Enumera dispositivos de video (cámaras)
+                if (devices.length === 0) {
+                    devices = await navigator.mediaDevices.enumerateDevices();
+                    devices = devices.filter(device => device.kind === 'videoinput');
+                }
+            } catch (error) {
+                console.error("Error accessing camera: ", error);
+            }
+        }
+
+        // Cambia entre cámaras
+        document.getElementById('switch-btn').addEventListener('click', () => {
+            if (devices.length > 1) {
+                currentDeviceId = currentDeviceId === devices[0].deviceId ? devices[1].deviceId : devices[0].deviceId;
+                initCamera(currentDeviceId);
+            }
+        });
+
+        // Procesar cada frame del video
+        video.addEventListener('play', () => {
+            function processFrame() {
+                if (video.paused || video.ended) return;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Obtener los datos de imagen del canvas
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                // Enviar los datos al Web Worker
+                worker.postMessage({
+                    imageData: imageData.data.buffer,
+                    width: imageData.width,
+                    height: imageData.height
+                }, [imageData.data.buffer]); // Transferencia de buffer
+
+                requestAnimationFrame(processFrame);  // Procesar el siguiente frame
+            }
+
+            requestAnimationFrame(processFrame);
+        });
+
+        // Recibir la imagen procesada del Web Worker
+        worker.onmessage = function(event) {
+            const { resultImageData, width, height } = event.data;
+
+            if (resultImageData && width && height) {
+                const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
+                ctx.putImageData(processedImageData, 0, 0);
+            } else {
+                console.error("Invalid image data received from Web Worker");
             }
         };
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
-
-            if (devices.length === 0) {
-                devices = await navigator.mediaDevices.enumerateDevices();
-                devices = devices.filter(device => device.kind === 'videoinput');
-            }
-        } catch (error) {
-            console.error("Error accessing camera: ", error);
-        }
-    }
-
-    // Cambia entre cámaras
-    document.getElementById('switch-btn').addEventListener('click', () => {
-        if (devices.length > 1) {
-            currentDeviceId = currentDeviceId === devices[0].deviceId ? devices[1].deviceId : devices[0].deviceId;
-            initCamera(currentDeviceId);
-        }
-    });
-
-    // Procesar cada frame del video
-    video.addEventListener('play', () => {
-        function processFrame() {
-            if (video.paused || video.ended) return;
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Obtener los datos de imagen del canvas
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            // Enviar los datos al Web Worker
-            worker.postMessage({
-                imageData: imageData.data.buffer,
-                width: imageData.width,
-                height: imageData.height
-            }, [imageData.data.buffer]); // Transferencia de buffer
-
-            requestAnimationFrame(processFrame);  // Procesar el siguiente frame
-        }
-
-        requestAnimationFrame(processFrame);
-    });
-
-    // Recibir la imagen procesada del Web Worker
-    worker.onmessage = function(event) {
-        const { resultImageData, width, height } = event.data;
-
-        if (resultImageData && width && height) {
-            const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
-            ctx.putImageData(processedImageData, 0, 0);
-        } else {
-            console.error("Invalid image data received from Web Worker");
-        }
-    };
-</script>
+    </script>
+</body>
+</html>
