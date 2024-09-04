@@ -6,7 +6,7 @@
     <title>Document Scanner with OpenCV.js</title>
 
     <!-- Incluir OpenCV.js desde CDN -->
-    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+    <script src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
 </head>
 <body>
     <h1>Document Scanner</h1>
@@ -27,84 +27,100 @@
         let worker = new Worker('worker.js');
         let currentDeviceId = null;
         let devices = [];
-
+    
         // Verifica que OpenCV.js esté listo
         function onOpenCVReady() {
             console.log("OpenCV.js is ready");
             initCamera();  // Inicializa la cámara solo cuando OpenCV está listo
         }
-
+    
         // La función `onRuntimeInitialized` de OpenCV.js
         window.cv = window.cv || {};
-        cv['onRuntimeInitialized'] = onOpenCVReady;
-
+        cv['onRuntimeInitialized'] = () => {
+            console.log("OpenCV.js ha sido inicializado correctamente.");
+            onOpenCVReady();
+        };
+    
         // Inicializa la cámara
         async function initCamera(deviceId = null) {
+            console.log("Inicializando cámara...");
             let constraints = {
                 video: {
                     deviceId: deviceId ? { exact: deviceId } : undefined,
                     facingMode: "environment" // Cámara trasera por defecto
                 }
             };
-
+    
             try {
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-
+                console.log("Cámara inicializada con éxito.");
+    
                 // Enumera dispositivos de video (cámaras)
                 if (devices.length === 0) {
                     devices = await navigator.mediaDevices.enumerateDevices();
                     devices = devices.filter(device => device.kind === 'videoinput');
+                    console.log("Dispositivos de cámara detectados:", devices);
                 }
             } catch (error) {
-                console.error("Error accessing camera: ", error);
+                console.error("Error al acceder a la cámara:", error);
             }
         }
-
+    
         // Cambia entre cámaras
         document.getElementById('switch-btn').addEventListener('click', () => {
             if (devices.length > 1) {
                 currentDeviceId = currentDeviceId === devices[0].deviceId ? devices[1].deviceId : devices[0].deviceId;
+                console.log("Cambiando a la cámara con ID:", currentDeviceId);
                 initCamera(currentDeviceId);
             }
         });
-
+    
         // Procesar cada frame del video
         video.addEventListener('play', () => {
             function processFrame() {
                 if (video.paused || video.ended) return;
-
+        
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
+        
                 // Obtener los datos de imagen del canvas
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height, { willReadFrequently: true });
 
+        
+                // Verifica el tamaño correcto de imageData
+                //console.log(`ImageData length: ${imageData.data.length}, Expected: ${4 * imageData.width * imageData.height}`);
+        
                 // Enviar los datos al Web Worker
                 worker.postMessage({
                     imageData: imageData.data.buffer,
                     width: imageData.width,
                     height: imageData.height
                 }, [imageData.data.buffer]); // Transferencia de buffer
-
+        
                 requestAnimationFrame(processFrame);  // Procesar el siguiente frame
             }
-
+        
             requestAnimationFrame(processFrame);
         });
-
+        
+    
         // Recibir la imagen procesada del Web Worker
         worker.onmessage = function(event) {
             const { resultImageData, width, height } = event.data;
-
+        
             if (resultImageData && width && height) {
+                // Procesar los datos recibidos en formato RGBA
                 const processedImageData = new ImageData(new Uint8ClampedArray(resultImageData), width, height);
                 ctx.putImageData(processedImageData, 0, 0);
+                console.log("Bordes dibujados correctamente en el canvas");
             } else {
-                console.error("Invalid image data received from Web Worker");
+                console.error("Datos de imagen no válidos recibidos del Web Worker");
             }
         };
+        
+
     </script>
 </body>
 </html>
